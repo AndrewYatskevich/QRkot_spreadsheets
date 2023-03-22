@@ -1,6 +1,6 @@
-from datetime import timedelta
-from typing import Union
 from aiogoogle import Aiogoogle
+from datetime import timedelta
+from typing import Dict, List, Union
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,7 @@ router = APIRouter()
 
 @router.post(
     '/',
-    response_model=list[dict[str, Union[str, timedelta]]],
+    response_model=List[Dict[str, Union[str, timedelta]]],
     dependencies=[Depends(current_superuser)],
 )
 async def get_report(

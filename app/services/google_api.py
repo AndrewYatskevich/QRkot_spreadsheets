@@ -1,5 +1,6 @@
 from aiogoogle import Aiogoogle
 from datetime import datetime
+from typing import List
 
 from app.core.config import settings
 
@@ -43,7 +44,7 @@ async def set_user_permissions(
 
 async def spreadsheets_update_value(
         spreadsheetid: str,
-        projects: list,
+        projects: List,
         wrapper_services: Aiogoogle
 ) -> None:
     now_date_time = datetime.now().strftime(FORMAT)
