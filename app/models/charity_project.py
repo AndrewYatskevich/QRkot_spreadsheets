@@ -11,3 +11,7 @@ class CharityProject(CharityProjectDonation):
     def mark_as_fully_invested(self):
         super().mark_as_fully_invested()
         self.fundraising_time = self.close_date - self.create_date
+
+    def __repr__(self):
+        return (f'<CharityProject(name={self.name}, '
+                f'full_amount={self.full_amount})>')
