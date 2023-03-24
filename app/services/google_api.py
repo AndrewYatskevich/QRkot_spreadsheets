@@ -1,34 +1,34 @@
+import copy
+
 from aiogoogle import Aiogoogle
 from datetime import datetime
-from typing import List
+from typing import List, Dict
 
 from app.core.config import settings
 
 FORMAT = "%Y/%m/%d %H:%M:%S"
-
-
-async def spreadsheets_create(wrapper_services: Aiogoogle) -> str:
-    now_date_time = datetime.now().strftime(FORMAT)
-    service = await wrapper_services.discover('sheets', 'v4')
-    spreadsheet_body = {
-        'properties': {'title': f'Отчет на {now_date_time}',
-                       'locale': 'ru_RU'},
-        'sheets': [{'properties': {'sheetType': 'GRID',
-                                   'sheetId': 0,
-                                   'title': 'Лист1',
-                                   'gridProperties': {'rowCount': 100,
-                                                      'columnCount': 11}}}]
-    }
-    response = await wrapper_services.as_service_account(
-        service.spreadsheets.create(json=spreadsheet_body)
-    )
-    spreadsheetid = response['spreadsheetId']
-    return spreadsheetid
+SHEET_TITLE = 'Лист1'
+JS_CONST = dict(
+    properties=dict(
+        title='Отчет от ',
+        locale='ru_RU',
+    ),
+    sheets=[dict(properties=dict(
+        sheetType='GRID',
+        sheetId=0,
+        title=SHEET_TITLE,
+    ))]
+)
+TABLE_HEADER = [
+    ['Отчет от'],
+    ['Топ проектов по скорости закрытия'],
+    ['Название проекта', 'Время сбора', 'Описание'],
+]
 
 
 async def set_user_permissions(
-        spreadsheetid: str,
-        wrapper_services: Aiogoogle
+        wrapper_services: Aiogoogle,
+        spreadsheet_id: str,
 ) -> None:
     permissions_body = {'type': 'user',
                         'role': 'writer',
@@ -36,28 +36,52 @@ async def set_user_permissions(
     service = await wrapper_services.discover('drive', 'v3')
     await wrapper_services.as_service_account(
         service.permissions.create(
-            fileId=spreadsheetid,
+            fileId=spreadsheet_id,
             json=permissions_body,
             fields="id"
         ))
 
 
-async def spreadsheets_update_value(
-        spreadsheetid: str,
-        projects: List,
-        wrapper_services: Aiogoogle
-) -> None:
+async def spreadsheets_create(
+        wrapper_services: Aiogoogle,
+        projects_count: int,
+        spreadsheet_body: Dict = None
+) -> List:
+    spreadsheet_body = (
+        spreadsheet_body if spreadsheet_body else copy.deepcopy(JS_CONST)
+    )
     now_date_time = datetime.now().strftime(FORMAT)
+    spreadsheet_body['properties']['title'] += now_date_time
+    spreadsheet_body['sheets'][0]['properties'].update(dict(
+        gridProperties=dict(
+            rowCount=projects_count + len(TABLE_HEADER),
+            columnCount=len(TABLE_HEADER[-1]),
+        )
+    ))
+    service = await wrapper_services.discover('sheets', 'v4')
+    response = await wrapper_services.as_service_account(
+        service.spreadsheets.create(json=spreadsheet_body)
+    )
+    spreadsheet_id = response['spreadsheetId']
+    return [spreadsheet_id, now_date_time]
+
+
+async def spreadsheets_update_value(
+        wrapper_services: Aiogoogle,
+        spreadsheet_id: str,
+        projects: List,
+        spreadsheet_creation_date: str,
+        table_header: List = None,
+) -> None:
+    table_header = table_header if table_header else copy.deepcopy(
+        TABLE_HEADER
+    )
+    table_header[0].append(spreadsheet_creation_date)
     service = await wrapper_services.discover('sheets', 'v4')
     table_values = [
-        ['Отчет от', now_date_time],
-        ['Топ проектов по скорости закрытия'],
-        ['Название проекта', 'Время сбора', 'Описание']
+        *table_header,
+        *[list(map(str, project)) for project in projects]
     ]
-    for project in projects:
-        new_row = [str(project['name']), str(project['fundraising_time']),
-                   str(project['description'])]
-        table_values.append(new_row)
 
     update_body = {
         'majorDimension': 'ROWS',
@@ -65,8 +89,8 @@ async def spreadsheets_update_value(
     }
     await wrapper_services.as_service_account(
         service.spreadsheets.values.update(
-            spreadsheetId=spreadsheetid,
-            range='A1:E30',
+            spreadsheetId=spreadsheet_id,
+            range=SHEET_TITLE,
             valueInputOption='USER_ENTERED',
             json=update_body
         )
